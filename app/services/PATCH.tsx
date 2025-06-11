@@ -1,4 +1,4 @@
-import { fetchCreatorByCreatorId, fetchStudentByStudentId, fetchCreatorApp } from "./GET";
+import { fetchCreatorByCreatorId, fetchStudentByStudentId, fetchCreatorApp, getRecordIdFromStudentId } from "./GET";
 
 export interface App {
   title: string;
@@ -296,6 +296,157 @@ export async function deleteContent(appIsPaid: boolean, appId: string, recordId:
     };
   } catch (error) {
     console.error('Error deleting content:', error);
+    throw error;
+  }
+}
+
+export async function unfollow(studentId: string, creatorId: string) {
+  try {
+    // First get the student's record ID
+    const studentRecordId = await getRecordIdFromStudentId(studentId);
+    if (!studentRecordId) {
+      throw new Error('Student record not found');
+    }
+
+    // Get the student's current record
+    const response = await fetch(`${STUDENT_AIRTABLE_URL}/${studentRecordId}`, {
+      headers: {
+        Authorization: `Bearer ${STUDENT_PAT}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || !data.fields) {
+      throw new Error('Invalid student record format');
+    }
+
+    // Get current following arrays
+    const currentFreeFollowing = JSON.parse(data.fields.freeFollowing || '[]') as string[];
+    const currentPaidFollowing = JSON.parse(data.fields.paidFollowing || '[]') as string[];
+
+    // Check which array to update
+    let updatedFreeFollowing = currentFreeFollowing;
+    let updatedPaidFollowing = currentPaidFollowing;
+    let wasFollowing = false;
+
+    // Check if creator is in either following array
+    if (currentFreeFollowing.includes(creatorId)) {
+      updatedFreeFollowing = currentFreeFollowing.filter(id => id !== creatorId);
+      wasFollowing = true;
+    } else if (currentPaidFollowing.includes(creatorId)) {
+      updatedPaidFollowing = currentPaidFollowing.filter(id => id !== creatorId);
+      wasFollowing = true;
+    }
+
+    if (!wasFollowing) {
+      throw new Error('Student is not following this creator');
+    }
+
+    // Update the student record
+    const updateResponse = await fetch(`${STUDENT_AIRTABLE_URL}/${studentRecordId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${STUDENT_PAT}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fields: {
+          freeFollowing: JSON.stringify(updatedFreeFollowing),
+          paidFollowing: JSON.stringify(updatedPaidFollowing),
+        }
+      })
+    });
+
+    if (!updateResponse.ok) {
+      throw new Error(`Failed to update student record: ${updateResponse.status}`);
+    }
+
+    return {
+      success: true,
+      message: 'Successfully unfollowed creator'
+    };
+  } catch (error) {
+    console.error('Error unfollowing:', error);
+    throw error;
+  }
+}
+  
+
+export async function follow(studentId: string, creatorId: string) {
+  try {
+    // First get the student's record ID
+    const studentRecordId = await getRecordIdFromStudentId(studentId);
+    if (!studentRecordId) {
+      throw new Error('Student record not found');
+    }
+
+    // Get the student's current record
+    const response = await fetch(`${STUDENT_AIRTABLE_URL}/${studentRecordId}`, {
+      headers: {
+        Authorization: `Bearer ${STUDENT_PAT}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || !data.fields) {
+      throw new Error('Invalid student record format');
+    }
+
+    // Get current following arrays
+    const currentFreeFollowing = JSON.parse(data.fields.freeFollowing || '[]') as string[];
+    const currentPaidFollowing = JSON.parse(data.fields.paidFollowing || '[]') as string[];
+
+    // Check which array to update
+    let updatedFreeFollowing = currentFreeFollowing;
+    let updatedPaidFollowing = currentPaidFollowing;
+    let wasFollowing = false;
+
+    // Check if creator is in either following array
+    if (currentFreeFollowing.includes(creatorId)) {
+      updatedFreeFollowing = currentFreeFollowing.filter(id => id !== creatorId);
+      wasFollowing = true;
+    } else if (currentPaidFollowing.includes(creatorId)) {
+      updatedPaidFollowing = currentPaidFollowing.filter(id => id !== creatorId);
+      wasFollowing = true;
+    }
+
+    if (wasFollowing) {
+      throw new Error('Student is already following this creator');
+    }
+
+    // Update the student record
+    const updateResponse = await fetch(`${STUDENT_AIRTABLE_URL}/${studentRecordId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${STUDENT_PAT}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fields: {
+          freeFollowing: JSON.stringify(updatedFreeFollowing),
+          paidFollowing: JSON.stringify(updatedPaidFollowing),
+        }
+      })
+    });
+
+    if (!updateResponse.ok) {
+      throw new Error(`Failed to update student record: ${updateResponse.status}`);
+    }
+
+    return {
+      success: true,
+      message: 'Successfully followed creator'
+    };
+  } catch (error) {
+    console.error('Error following:', error);
     throw error;
   }
 }
